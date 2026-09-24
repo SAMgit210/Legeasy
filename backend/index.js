@@ -4,7 +4,7 @@ dotenv.config();
 import mongoose from "mongoose";
 import Document from "./models/Document.js";
 
-
+import PDFParser from "pdf2json";
 import multer from "multer";
 import express from "express";
 import cors from "cors";
@@ -116,19 +116,37 @@ app.post(
       await connectDB();
 
       // Read PDF directly from memory
-     const pdfBuffer = req.file.buffer;
+    const pdfBuffer = req.file.buffer;
 
-const { PDFParse } = await import("pdf-parse");
+const pdfParser = new PDFParser();
 
-const parser = new PDFParse({
-  data: pdfBuffer
-});
+const cleanedText = await new Promise((resolve, reject) => {
+  pdfParser.on("pdfParser_dataError", (error) => {
+    reject(error.parserError);
+  });
 
-      const result = await parser.getText();
+  pdfParser.on("pdfParser_dataReady", (pdfData) => {
+    const text = pdfData.Pages
+      .map((page) =>
+        page.Texts.map((text) => {
+          try {
+            return decodeURIComponent(text.R[0].T);
+          } catch {
+            return text.R[0].T;
+          }
+        }).join(" ")
+      )
+      .join("\n");
 
-      const cleanedText = result.text
+    resolve(
+      text
         .replace(/--\s*\d+\s*of\s*\d+\s*--/g, "")
-        .replace(/\r/g, "");
+        .replace(/\r/g, "")
+    );
+  });
+
+  pdfParser.parseBuffer(pdfBuffer);
+});
 
       const clauses = cleanedText
         .split(/\n\s*\n/)
