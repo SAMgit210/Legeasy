@@ -26,7 +26,7 @@ app.use(express.json());
 
 // MongoDB
 mongoose
-  .connect("mongodb://127.0.0.1:27017/legeasy")
+  .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("MongoDB connected");
   })
@@ -128,7 +128,7 @@ app.post(
 // AI explanation
 app.post("/api/explain", async (req, res) => {
   try {
-    const { clause } = req.body;
+    const { clause, language = "en" } = req.body;
 
     if (!clause) {
       return res.status(400).json({
@@ -136,30 +136,57 @@ app.post("/api/explain", async (req, res) => {
       });
     }
 
-    // Temporary demo explanation
     const lowerClause = clause.toLowerCase();
 
-    let explanation =
-      "This clause describes an important condition of the agreement.";
+    let explanation;
 
-    if (lowerClause.includes("penalty")) {
+    if (language === "hi") {
       explanation =
-        "This clause means that a penalty may be charged if the required payment or obligation is not completed on time.";
-    }
+        "यह क्लॉज़ समझौते की एक महत्वपूर्ण शर्त बताता है।";
 
-    if (lowerClause.includes("termination")) {
-      explanation +=
-        " It also explains when one or both parties can end the agreement.";
-    }
+      if (lowerClause.includes("penalty")) {
+        explanation =
+          "इस क्लॉज़ का मतलब है कि यदि आवश्यक भुगतान या दायित्व समय पर पूरा नहीं किया जाता है, तो जुर्माना लगाया जा सकता है।";
+      }
 
-    if (lowerClause.includes("notice")) {
-      explanation +=
-        " The agreement requires advance notice before taking certain actions.";
-    }
+      if (lowerClause.includes("termination")) {
+        explanation +=
+          " इसमें यह भी बताया गया है कि समझौता कब समाप्त किया जा सकता है।";
+      }
 
-    if (lowerClause.includes("arbitration")) {
-      explanation +=
-        " Disputes may be handled through arbitration instead of going directly to court.";
+      if (lowerClause.includes("notice")) {
+        explanation +=
+          " कुछ कार्यों से पहले पहले से सूचना देना आवश्यक है।";
+      }
+
+      if (lowerClause.includes("arbitration")) {
+        explanation +=
+          " विवाद होने पर मामला सीधे अदालत में जाने के बजाय मध्यस्थता के माध्यम से हल किया जा सकता है।";
+      }
+
+    } else {
+      explanation =
+        "This clause describes an important condition of the agreement.";
+
+      if (lowerClause.includes("penalty")) {
+        explanation =
+          "This clause means that a penalty may be charged if the required payment or obligation is not completed on time.";
+      }
+
+      if (lowerClause.includes("termination")) {
+        explanation +=
+          " It also explains when one or both parties can end the agreement.";
+      }
+
+      if (lowerClause.includes("notice")) {
+        explanation +=
+          " The agreement requires advance notice before taking certain actions.";
+      }
+
+      if (lowerClause.includes("arbitration")) {
+        explanation +=
+          " Disputes may be handled through arbitration instead of going directly to court.";
+      }
     }
 
     res.json({

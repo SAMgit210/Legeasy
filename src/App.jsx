@@ -6,11 +6,13 @@ function App() {
   const [message, setMessage] = useState("");
   const [clauses, setClauses] = useState([]);
   const [explanations, setExplanations] = useState({});
+  const [explanationLanguage, setExplanationLanguage] = useState("en");
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [loadingClause, setLoadingClause] = useState(null);
 
   // Test backend
   const testBackend = () => {
-    fetch("http://localhost:5000/")
+    fetch("/")
       .then((response) => response.json())
       .then((data) => {
         setMessage(data.message);
@@ -33,7 +35,7 @@ function App() {
 
     setMessage("Processing document...");
 
-    fetch("http://localhost:5000/api/documents/upload", {
+    fetch("/api/documents/upload", {
       method: "POST",
       body: formData
     })
@@ -49,36 +51,65 @@ function App() {
   };
 
   // Explain clause
-  const explainClause = (clauseText, index) => {
-    setLoadingClause(index);
+  const explainClause = async (
+    clause,
+    index,
+    language = explanationLanguage
+  ) => {
+    try {
+      setLoadingClause(index);
 
-    fetch("http://localhost:5000/api/explain", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        clause: clauseText
-      })
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        setExplanations((previous) => ({
-          ...previous,
-          [index]: data.explanation || data.message
-        }));
-      })
-      .catch((error) => {
-        console.log("AI error:", error);
-
-        setExplanations((previous) => ({
-          ...previous,
-          [index]: "Unable to generate explanation."
-        }));
-      })
-      .finally(() => {
-        setLoadingClause(null);
+      const response = await fetch("/api/explain", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          clause: clause,
+          language: language
+        })
       });
+
+      const data = await response.json();
+
+      setExplanations((prev) => ({
+        ...prev,
+        [index]: data.explanation
+      }));
+    } catch (error) {
+      console.error("Explanation error:", error);
+
+      setExplanations((prev) => ({
+        ...prev,
+        [index]: "Failed to generate explanation."
+      }));
+    } finally {
+      setLoadingClause(null);
+    }
+  };
+
+  // Voice explanation
+  const speakExplanation = (text) => {
+    if (!text) return;
+
+    window.speechSynthesis.cancel();
+
+    const speech = new SpeechSynthesisUtterance(text);
+
+    speech.lang =
+      explanationLanguage === "hi"
+        ? "hi-IN"
+        : "en-IN";
+
+    speech.rate = 0.9;
+
+    setIsSpeaking(true);
+
+    speech.onend = () => {
+      setIsSpeaking(false);
+    };
+
+    window.speechSynthesis.speak(speech);
   };
 
   return (
@@ -95,11 +126,11 @@ function App() {
         </div>
       </header>
 
-
       {/* Hero Section */}
       <main className="container">
 
         <section className="hero">
+
           <div className="hero-badge">
             AI-Powered Document Analysis
           </div>
@@ -113,8 +144,8 @@ function App() {
             Upload a legal document and turn complex clauses
             into simple, easy-to-understand explanations.
           </p>
-        </section>
 
+        </section>
 
         {/* Upload Card */}
         <section className="upload-card">
@@ -149,7 +180,10 @@ function App() {
               }}
             />
 
-            <label htmlFor="fileInput" className="choose-button">
+            <label
+              htmlFor="fileInput"
+              className="choose-button"
+            >
               Choose PDF
             </label>
 
@@ -171,7 +205,6 @@ function App() {
 
         </section>
 
-
         {/* Status */}
         {message && (
           <div className="status">
@@ -180,8 +213,7 @@ function App() {
           </div>
         )}
 
-
-        {/* Backend test - keep for development */}
+        {/* Backend test */}
         <button
           className="backend-button"
           onClick={testBackend}
@@ -189,30 +221,37 @@ function App() {
           Test Backend Connection
         </button>
 
-
         {/* Clauses */}
         {clauses.length > 0 && (
           <section className="results">
 
             <div className="results-header">
+
               <div>
+
                 <div className="section-label">
                   DOCUMENT ANALYSIS
                 </div>
 
                 <h2>Analyzed Clauses</h2>
+
               </div>
 
               <div className="clause-count">
                 {clauses.length}{" "}
-                {clauses.length === 1 ? "Clause" : "Clauses"}
+                {clauses.length === 1
+                  ? "Clause"
+                  : "Clauses"}
               </div>
-            </div>
 
+            </div>
 
             {clauses.map((clause, index) => (
 
-              <div className="clause-card" key={index}>
+              <div
+                className="clause-card"
+                key={index}
+              >
 
                 <div className="clause-top">
 
@@ -228,24 +267,25 @@ function App() {
 
                 </div>
 
-
                 <p className="clause-text">
                   {clause.text}
                 </p>
 
+                {/* Explain only HIGH-risk clauses */}
+                {clause.risk === "HIGH" && (
+                  <button
+                    className="explain-button"
+                    onClick={() =>
+                      explainClause(clause.text, index)
+                    }
+                  >
+                    {loadingClause === index
+                      ? "Generating explanation..."
+                      : "✦ Explain with AI"}
+                  </button>
+                )}
 
-                <button
-                  className="explain-button"
-                  onClick={() =>
-                    explainClause(clause.text, index)
-                  }
-                >
-                  {loadingClause === index
-                    ? "Generating explanation..."
-                    : "✦ Explain with AI"}
-                </button>
-
-
+                {/* Explanation */}
                 {explanations[index] && (
                   <div className="explanation">
 
@@ -254,9 +294,66 @@ function App() {
                       AI Explanation
                     </div>
 
+                    {/* Language Toggle */}
+                    <div className="language-toggle">
+
+                      <button
+                        className={
+                          explanationLanguage === "en"
+                            ? "active-language"
+                            : ""
+                        }
+                        onClick={() => {
+                          setExplanationLanguage("en");
+
+                          explainClause(
+                            clause.text,
+                            index,
+                            "en"
+                          );
+                        }}
+                      >
+                        English
+                      </button>
+
+                      <button
+                        className={
+                          explanationLanguage === "hi"
+                            ? "active-language"
+                            : ""
+                        }
+                        onClick={() => {
+                          setExplanationLanguage("hi");
+
+                          explainClause(
+                            clause.text,
+                            index,
+                            "hi"
+                          );
+                        }}
+                      >
+                        हिंदी
+                      </button>
+
+                    </div>
+
                     <p>
                       {explanations[index]}
                     </p>
+
+                    {/* Voice */}
+                    <button
+                      className="voice-button"
+                      onClick={() =>
+                        speakExplanation(
+                          explanations[index]
+                        )
+                      }
+                    >
+                      {isSpeaking
+                        ? "🔊 Speaking..."
+                        : "🔊 Listen"}
+                    </button>
 
                   </div>
                 )}
@@ -269,7 +366,6 @@ function App() {
         )}
 
       </main>
-
 
       {/* Footer */}
       <footer>
