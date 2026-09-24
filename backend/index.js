@@ -4,7 +4,7 @@ dotenv.config();
 import mongoose from "mongoose";
 import Document from "./models/Document.js";
 
-import { PDFParse } from "pdf-parse";
+
 import multer from "multer";
 import express from "express";
 import cors from "cors";
@@ -116,11 +116,13 @@ app.post(
       await connectDB();
 
       // Read PDF directly from memory
-      const pdfBuffer = req.file.buffer;
+     const pdfBuffer = req.file.buffer;
 
-      const parser = new PDFParse({
-        data: pdfBuffer
-      });
+const { PDFParse } = await import("pdf-parse");
+
+const parser = new PDFParse({
+  data: pdfBuffer
+});
 
       const result = await parser.getText();
 
