@@ -10,7 +10,7 @@ function App() {
 
   // Test backend
   const testBackend = () => {
-    fetch("http://localhost:5000/")
+    fetch("/")
       .then((response) => response.json())
       .then((data) => {
         setMessage(data.message);
@@ -33,7 +33,7 @@ function App() {
 
     setMessage("Processing document...");
 
-    fetch("http://localhost:5000/api/documents/upload", {
+    fetch("/api/documents/upload", {
       method: "POST",
       body: formData
     })
@@ -52,7 +52,7 @@ function App() {
   const explainClause = (clauseText, index) => {
     setLoadingClause(index);
 
-    fetch("http://localhost:5000/api/explain", {
+    fetch("/api/explain", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
