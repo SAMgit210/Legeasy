@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./App.css";
+const API_URL = "https://legeasy-backend.vercel.app";
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -10,7 +11,7 @@ function App() {
 
   // Test backend
   const testBackend = () => {
-    fetch("/")
+    fetch(`${API_URL}/`)
       .then((response) => response.json())
       .then((data) => {
         setMessage(data.message);
@@ -33,7 +34,7 @@ function App() {
 
     setMessage("Processing document...");
 
-    fetch("/api/documents/upload", {
+    fetch(`${API_URL}/api/documents/upload`, {
       method: "POST",
       body: formData
     })
@@ -52,7 +53,7 @@ function App() {
   const explainClause = (clauseText, index) => {
     setLoadingClause(index);
 
-    fetch("/api/explain", {
+    fetch(`${API_URL}/api/explain`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
