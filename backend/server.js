@@ -4,38 +4,58 @@ dotenv.config();
 import mongoose from "mongoose";
 import Document from "./models/Document.js";
 
-import fs from "fs";
 import { PDFParse } from "pdf-parse";
 import multer from "multer";
 import express from "express";
 import cors from "cors";
 
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
 const app = express();
-
-const upload = multer({ dest: "uploads/" });
 
 app.use(cors());
 app.use(express.json());
 
 
-// MongoDB
-mongoose
-  .connect("mongodb://127.0.0.1:27017/legeasy")
-  .then(() => {
-    console.log("MongoDB connected");
-  })
-  .catch((error) => {
-    console.log("MongoDB connection error:", error);
-  });
+// ===============================
+// MongoDB Connection
+// ===============================
+
+let mongoConnectionPromise = null;
+
+async function connectDB() {
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error("MONGODB_URI is not configured");
+  }
+
+  if (!mongoConnectionPromise) {
+    mongoConnectionPromise = mongoose
+      .connect(process.env.MONGODB_URI)
+      .catch((error) => {
+        mongoConnectionPromise = null;
+        throw error;
+      });
+  }
+
+  await mongoConnectionPromise;
+}
 
 
-// Test backend
+// ===============================
+// Multer - Store PDF in memory
+// ===============================
+
+const upload = multer({
+  storage: multer.memoryStorage()
+});
+
+
+// ===============================
+// Test Backend
+// ===============================
+
 app.get("/", (req, res) => {
   res.json({
     message: "Legeasy Backend is Working!",
@@ -44,7 +64,10 @@ app.get("/", (req, res) => {
 });
 
 
-// Risk classification
+// ===============================
+// Risk Classification
+// ===============================
+
 function classifyRisk(clause) {
   const lowerClause = clause.toLowerCase();
 
@@ -74,13 +97,26 @@ function classifyRisk(clause) {
 }
 
 
+// ===============================
 // Upload PDF
+// ===============================
+
 app.post(
   "/api/documents/upload",
   upload.single("document"),
   async (req, res) => {
     try {
-      const pdfBuffer = fs.readFileSync(req.file.path);
+      if (!req.file) {
+        return res.status(400).json({
+          message: "No PDF file uploaded"
+        });
+      }
+
+      // Connect to MongoDB
+      await connectDB();
+
+      // Read PDF directly from memory
+      const pdfBuffer = req.file.buffer;
 
       const parser = new PDFParse({
         data: pdfBuffer
@@ -103,6 +139,7 @@ app.post(
         risk: classifyRisk(clause)
       }));
 
+      // Save document to MongoDB
       await Document.create({
         fileName: req.file.originalname,
         text: cleanedText,
@@ -115,17 +152,21 @@ app.post(
       });
 
     } catch (error) {
-      console.log("Upload error:", error);
+      console.error("Upload error:", error);
 
       res.status(500).json({
-        message: "Failed to process PDF"
+        message: "Failed to process PDF",
+        error: error.message
       });
     }
   }
 );
 
 
-// AI explanation
+// ===============================
+// AI Explanation
+// ===============================
+
 app.post("/api/explain", async (req, res) => {
   try {
     const { clause } = req.body;
@@ -136,7 +177,9 @@ app.post("/api/explain", async (req, res) => {
       });
     }
 
-    // Temporary demo explanation
+    // Temporary deterministic explanation
+    // Used because OpenAI API credits are currently unavailable.
+
     const lowerClause = clause.toLowerCase();
 
     let explanation =
@@ -167,7 +210,7 @@ app.post("/api/explain", async (req, res) => {
     });
 
   } catch (error) {
-    console.log("Explanation error:", error);
+    console.error("Explanation error:", error);
 
     res.status(500).json({
       message: "Failed to generate explanation"
@@ -176,10 +219,16 @@ app.post("/api/explain", async (req, res) => {
 });
 
 
+// ===============================
+// Local Development
+// ===============================
+
 if (!process.env.VERCEL) {
   app.listen(5000, () => {
     console.log("Legeasy backend running on port 5000");
   });
 }
 
+
+// Vercel
 export default app;
